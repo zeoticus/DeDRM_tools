@@ -1,4 +1,5 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 #
 # This is a python script. You need a Python interpreter to run it.
 # For example, ActiveState Python, which exists for windows.
@@ -10,6 +11,7 @@
 # Changelog epubtest
 #  1.00 - Cut to epubtest.py, testing ePub files only by Apprentice Alf
 #  1.01 - Added routine for use by Windows DeDRM
+#  2.00 - Python 3, September 2020
 #
 # Written in 2011 by Paul Durrant
 # Released with unlicense. See http://unlicense.org/
@@ -44,10 +46,7 @@
 # It's still polite to give attribution if you do reuse this code.
 #
 
-from __future__ import with_statement
-from __future__ import print_function
-
-__version__ = '1.01'
+__version__ = '2.0'
 
 import sys, struct, os, traceback
 import zlib
@@ -67,10 +66,11 @@ class SafeUnbuffered:
         if self.encoding == None:
             self.encoding = "utf-8"
     def write(self, data):
-        if isinstance(data,unicode):
+        if isinstance(data, str):
             data = data.encode(self.encoding,"replace")
-        self.stream.write(data)
-        self.stream.flush()
+        self.stream.buffer.write(data)
+        self.stream.buffer.flush()
+
     def __getattr__(self, attr):
         return getattr(self.stream, attr)
 
@@ -108,15 +108,13 @@ def unicode_argv():
             # Remove Python executable and commands if present
             start = argc.value - len(sys.argv)
             return [argv[i] for i in
-                    xrange(start, argc.value)]
+                    range(start, argc.value)]
         # if we don't have any arguments at all, just pass back script name
         # this should never happen
-        return [u"epubtest.py"]
+        return ["epubtest.py"]
     else:
-        argvencoding = sys.stdin.encoding
-        if argvencoding == None:
-            argvencoding = "utf-8"
-        return [arg if (type(arg) == unicode) else unicode(arg,argvencoding) for arg in sys.argv]
+        argvencoding = sys.stdin.encoding or "utf-8"
+        return [arg if isinstance(arg, str) else str(arg, argvencoding) for arg in sys.argv]
 
 _FILENAME_LEN_OFFSET = 26
 _EXTRA_LEN_OFFSET = 28
@@ -171,12 +169,12 @@ def getfiledata(file, zi):
 
 def encryption(infile):
     # returns encryption: one of Unencrypted, Adobe, B&N and Unknown
-    encryption = "Unknown"
+    encryption = "Error When Checking."
     try:
         with open(infile,'rb') as infileobject:
             bookdata = infileobject.read(58)
             # Check for Zip
-            if bookdata[0:0+2] == "PK":
+            if bookdata[0:0+2] == b"PK":
                 foundrights = False
                 foundencryption = False
                 inzip = zipfile.ZipFile(infile,'r')
@@ -200,7 +198,10 @@ def encryption(infile):
 
 def main():
     argv=unicode_argv()
-    print(encryption(argv[1]))
+    if len(argv) < 2:
+        print("Give an ePub file as a parameter.")
+    else:
+        print(encryption(argv[1]))
     return 0
 
 if __name__ == "__main__":

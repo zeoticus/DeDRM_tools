@@ -1,28 +1,27 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
-from __future__ import with_statement
-from __future__ import print_function
 
 # Engine to remove drm from Kindle KFX ebooks
 
+#  2.0   - Python 3 for calibre 5.0
+#  2.1   - Some fixes for debugging
+#  2.1.1 - Whitespace!
+
+
 import os
 import shutil
+import traceback
 import zipfile
 
+from io import BytesIO
 try:
-    from cStringIO import StringIO
-except ImportError:
-    from StringIO import StringIO
-
-try:
-    from calibre_plugins.dedrm import ion
-except ImportError:
-    import ion
+    from ion import DrmIon, DrmIonVoucher
+except:
+    from calibre_plugins.dedrm.ion import DrmIon, DrmIonVoucher
 
 
 __license__ = 'GPL v3'
-__version__ = '1.0'
+__version__ = '2.0'
 
 
 class KFXZipBook:
@@ -39,36 +38,39 @@ class KFXZipBook:
             for filename in zf.namelist():
                 with zf.open(filename) as fh:
                     data = fh.read(8)
-                    if data != '\xeaDRMION\xee':
+                    if data != b'\xeaDRMION\xee':
                         continue
                     data += fh.read()
                     if self.voucher is None:
                         self.decrypt_voucher(totalpids)
-                    print(u'Decrypting KFX DRMION: {0}'.format(filename))
-                    outfile = StringIO()
-                    ion.DrmIon(StringIO(data[8:-8]), lambda name: self.voucher).parse(outfile)
+                    print("Decrypting KFX DRMION: {0}".format(filename))
+                    outfile = BytesIO()
+                    DrmIon(BytesIO(data[8:-8]), lambda name: self.voucher).parse(outfile)
                     self.decrypted[filename] = outfile.getvalue()
 
         if not self.decrypted:
-            print(u'The .kfx-zip archive does not contain an encrypted DRMION file')
+            print("The .kfx-zip archive does not contain an encrypted DRMION file")
 
     def decrypt_voucher(self, totalpids):
         with zipfile.ZipFile(self.infile, 'r') as zf:
             for info in zf.infolist():
                 with zf.open(info.filename) as fh:
                     data = fh.read(4)
-                    if data != '\xe0\x01\x00\xea':
+                    if data != b'\xe0\x01\x00\xea':
                         continue
 
                     data += fh.read()
-                    if 'ProtectedData' in data:
+                    if b'ProtectedData' in data:
                         break   # found DRM voucher
             else:
-                raise Exception(u'The .kfx-zip archive contains an encrypted DRMION file without a DRM voucher')
+                raise Exception("The .kfx-zip archive contains an encrypted DRMION file without a DRM voucher")
 
-        print(u'Decrypting KFX DRM voucher: {0}'.format(info.filename))
+        print("Decrypting KFX DRM voucher: {0}".format(info.filename))
 
         for pid in [''] + totalpids:
+            # Belt and braces. PIDs should be unicode strings, but just in case...
+            if isinstance(pid, bytes):
+                pid = pid.decode('ascii')
             for dsn_len,secret_len in [(0,0), (16,0), (16,40), (32,40), (40,0), (40,40)]:
                 if len(pid) == dsn_len + secret_len:
                     break       # split pid into DSN and account secret
@@ -76,20 +78,21 @@ class KFXZipBook:
                 continue
 
             try:
-                voucher = ion.DrmIonVoucher(StringIO(data), pid[:dsn_len], pid[dsn_len:])
+                voucher = DrmIonVoucher(BytesIO(data), pid[:dsn_len], pid[dsn_len:])
                 voucher.parse()
                 voucher.decryptvoucher()
                 break
             except:
+                traceback.print_exc()
                 pass
         else:
-            raise Exception(u'Failed to decrypt KFX DRM voucher with any key')
+            raise Exception("Failed to decrypt KFX DRM voucher with any key")
 
-        print(u'KFX DRM voucher successfully decrypted')
+        print("KFX DRM voucher successfully decrypted")
 
         license_type = voucher.getlicensetype()
         if license_type != "Purchase":
-            raise Exception((u'This book is licensed as {0}. '
+            raise Exception(("This book is licensed as {0}. "
                     'These tools are intended for use on purchased books.').format(license_type))
 
         self.voucher = voucher

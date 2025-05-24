@@ -1,31 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from __future__ import with_statement
-
 # adobekey.pyw, version 6.0
-# Copyright © 2009-2010 i♥cabbages
+# Copyright © 2009-2020 i♥cabbages, Apprentice Harper et al.
 
 # Released under the terms of the GNU General Public Licence, version 3
 # <http://www.gnu.org/licenses/>
-
-# Modified 2010–2016 by several people
-
-# Windows users: Before running this program, you must first install Python.
-#   We recommend ActiveState Python 2.7.X for Windows (x86) from
-#   http://www.activestate.com/activepython/downloads.
-#   You must also install PyCrypto from
-#   http://www.voidspace.org.uk/python/modules.shtml#pycrypto
-#   (make certain to install the version for Python 2.7).
-#   Then save this script file as adobekey.pyw and double-click on it to run it.
-#   It will create a file named adobekey_1.der in in the same directory as the script.
-#   This is your Adobe Digital Editions user key.
-#
-# Mac OS X users: Save this script file as adobekey.pyw.  You can run this
-#   program from the command line (python adobekey.pyw) or by double-clicking
-#   it when it has been associated with PythonLauncher.  It will create a file
-#   named adobekey_1.der in the same directory as the script.
-#   This is your Adobe Digital Editions user key.
 
 # Revision history:
 #   1 - Initial release, for Adobe Digital Editions 1.7
@@ -48,16 +28,18 @@ from __future__ import with_statement
 #   5.8 - Added getkey interface for Windows DeDRM application
 #   5.9 - moved unicode_argv call inside main for Windows DeDRM compatibility
 #   6.0 - Work if TkInter is missing
+#   7.0 - Python 3 for calibre 5
 
 """
 Retrieve Adobe ADEPT user key.
 """
-from __future__ import print_function
 
 __license__ = 'GPL v3'
-__version__ = '6.0'
+__version__ = '7.0'
 
 import sys, os, struct, getopt
+from base64 import b64decode
+
 
 # Wrap a stream so that output gets flushed immediately
 # and also make sure that any unicode strings get
@@ -69,10 +51,11 @@ class SafeUnbuffered:
         if self.encoding == None:
             self.encoding = "utf-8"
     def write(self, data):
-        if isinstance(data,unicode):
+        if isinstance(data, str):
             data = data.encode(self.encoding,"replace")
-        self.stream.write(data)
-        self.stream.flush()
+        self.stream.buffer.write(data)
+        self.stream.buffer.flush()
+
     def __getattr__(self, attr):
         return getattr(self.stream, attr)
 
@@ -110,15 +93,13 @@ def unicode_argv():
             # Remove Python executable and commands if present
             start = argc.value - len(sys.argv)
             return [argv[i] for i in
-                    xrange(start, argc.value)]
+                    range(start, argc.value)]
         # if we don't have any arguments at all, just pass back script name
         # this should never happen
-        return [u"adobekey.py"]
+        return ["adobekey.py"]
     else:
-        argvencoding = sys.stdin.encoding
-        if argvencoding == None:
-            argvencoding = "utf-8"
-        return [arg if (type(arg) == unicode) else unicode(arg,argvencoding) for arg in sys.argv]
+        argvencoding = sys.stdin.encoding or "utf-8"
+        return [arg if isinstance(arg, str) else str(arg, argvencoding) for arg in sys.argv]
 
 class ADEPTError(Exception):
     pass
@@ -130,11 +111,13 @@ if iswindows:
         c_long, c_ulong
 
     from ctypes.wintypes import LPVOID, DWORD, BOOL
-    import _winreg as winreg
+    import winreg
 
     def _load_crypto_libcrypto():
         from ctypes.util import find_library
-        libcrypto = find_library('libeay32')
+        libcrypto = find_library('libcrypto-1_1')
+        if libcrypto is None:
+            libcrypto = find_library('libeay32')
         if libcrypto is None:
             raise ADEPTError('libcrypto not found')
         libcrypto = CDLL(libcrypto)
@@ -168,7 +151,7 @@ if iswindows:
                     raise ADEPTError('Failed to initialize AES key')
             def decrypt(self, data):
                 out = create_string_buffer(len(data))
-                iv = ("\x00" * self._blocksize)
+                iv = (b"\x00" * self._blocksize)
                 rv = AES_cbc_encrypt(data, out, len(data), self._key, iv, 0)
                 if rv == 0:
                     raise ADEPTError('AES decryption failed')
@@ -179,7 +162,7 @@ if iswindows:
         from Crypto.Cipher import AES as _AES
         class AES(object):
             def __init__(self, key):
-                self._aes = _AES.new(key, _AES.MODE_CBC, '\x00'*16)
+                self._aes = _AES.new(key, _AES.MODE_CBC, b'\x00'*16)
             def decrypt(self, data):
                 return self._aes.decrypt(data)
         return AES
@@ -287,44 +270,44 @@ if iswindows:
 
     if struct.calcsize("P") == 4:
         CPUID0_INSNS = (
-            "\x53"             # push   %ebx
-            "\x31\xc0"         # xor    %eax,%eax
-            "\x0f\xa2"         # cpuid
-            "\x8b\x44\x24\x08" # mov    0x8(%esp),%eax
-            "\x89\x18"         # mov    %ebx,0x0(%eax)
-            "\x89\x50\x04"     # mov    %edx,0x4(%eax)
-            "\x89\x48\x08"     # mov    %ecx,0x8(%eax)
-            "\x5b"             # pop    %ebx
-            "\xc3"             # ret
+            b"\x53"             # push   %ebx
+            b"\x31\xc0"         # xor    %eax,%eax
+            b"\x0f\xa2"         # cpuid
+            b"\x8b\x44\x24\x08" # mov    0x8(%esp),%eax
+            b"\x89\x18"         # mov    %ebx,0x0(%eax)
+            b"\x89\x50\x04"     # mov    %edx,0x4(%eax)
+            b"\x89\x48\x08"     # mov    %ecx,0x8(%eax)
+            b"\x5b"             # pop    %ebx
+            b"\xc3"             # ret
         )
         CPUID1_INSNS = (
-            "\x53"             # push   %ebx
-            "\x31\xc0"         # xor    %eax,%eax
-            "\x40"             # inc    %eax
-            "\x0f\xa2"         # cpuid
-            "\x5b"             # pop    %ebx
-            "\xc3"             # ret
+            b"\x53"             # push   %ebx
+            b"\x31\xc0"         # xor    %eax,%eax
+            b"\x40"             # inc    %eax
+            b"\x0f\xa2"         # cpuid
+            b"\x5b"             # pop    %ebx
+            b"\xc3"             # ret
         )
     else:
         CPUID0_INSNS = (
-            "\x49\x89\xd8"     # mov    %rbx,%r8
-            "\x49\x89\xc9"     # mov    %rcx,%r9
-            "\x48\x31\xc0"     # xor    %rax,%rax
-            "\x0f\xa2"         # cpuid
-            "\x4c\x89\xc8"     # mov    %r9,%rax
-            "\x89\x18"         # mov    %ebx,0x0(%rax)
-            "\x89\x50\x04"     # mov    %edx,0x4(%rax)
-            "\x89\x48\x08"     # mov    %ecx,0x8(%rax)
-            "\x4c\x89\xc3"     # mov    %r8,%rbx
-            "\xc3"             # retq
+            b"\x49\x89\xd8"     # mov    %rbx,%r8
+            b"\x49\x89\xc9"     # mov    %rcx,%r9
+            b"\x48\x31\xc0"     # xor    %rax,%rax
+            b"\x0f\xa2"         # cpuid
+            b"\x4c\x89\xc8"     # mov    %r9,%rax
+            b"\x89\x18"         # mov    %ebx,0x0(%rax)
+            b"\x89\x50\x04"     # mov    %edx,0x4(%rax)
+            b"\x89\x48\x08"     # mov    %ecx,0x8(%rax)
+            b"\x4c\x89\xc3"     # mov    %r8,%rbx
+            b"\xc3"             # retq
         )
         CPUID1_INSNS = (
-            "\x53"             # push   %rbx
-            "\x48\x31\xc0"     # xor    %rax,%rax
-            "\x48\xff\xc0"     # inc    %rax
-            "\x0f\xa2"         # cpuid
-            "\x5b"             # pop    %rbx
-            "\xc3"             # retq
+            b"\x53"             # push   %rbx
+            b"\x48\x31\xc0"     # xor    %rax,%rax
+            b"\x48\xff\xc0"     # inc    %rax
+            b"\x0f\xa2"         # cpuid
+            b"\x5b"             # pop    %rbx
+            b"\xc3"             # retq
         )
 
     def cpuid0():
@@ -383,7 +366,7 @@ if iswindows:
             plkroot = winreg.OpenKey(cuser, PRIVATE_LICENCE_KEY_PATH)
         except WindowsError:
             raise ADEPTError("Could not locate ADE activation")
-        for i in xrange(0, 16):
+        for i in range(0, 16):
             try:
                 plkparent = winreg.OpenKey(plkroot, "%04d" % (i,))
             except WindowsError:
@@ -391,7 +374,7 @@ if iswindows:
             ktype = winreg.QueryValueEx(plkparent, None)[0]
             if ktype != 'credentials':
                 continue
-            for j in xrange(0, 16):
+            for j in range(0, 16):
                 try:
                     plkkey = winreg.OpenKey(plkparent, "%04d" % (j,))
                 except WindowsError:
@@ -400,15 +383,15 @@ if iswindows:
                 if ktype != 'privateLicenseKey':
                     continue
                 userkey = winreg.QueryValueEx(plkkey, 'value')[0]
-                userkey = userkey.decode('base64')
+                userkey = b64decode(userkey)
                 aes = AES(keykey)
                 userkey = aes.decrypt(userkey)
-                userkey = userkey[26:-ord(userkey[-1])]
+                userkey = userkey[26:-ord(userkey[-1:])]
                 #print "found key:",userkey.encode('hex')
                 keys.append(userkey)
         if len(keys) == 0:
             raise ADEPTError('Could not locate privateLicenseKey')
-        print(u"Found {0:d} keys".format(len(keys)))
+        print("Found {0:d} keys".format(len(keys)))
         return keys
 
 
@@ -428,12 +411,12 @@ elif isosx:
         cmdline = cmdline.encode(sys.getfilesystemencoding())
         p2 = subprocess.Popen(cmdline, shell=True, stdin=None, stdout=subprocess.PIPE, stderr=subprocess.PIPE, close_fds=False)
         out1, out2 = p2.communicate()
-        reslst = out1.split('\n')
+        reslst = out1.split(b'\n')
         cnt = len(reslst)
-        ActDatPath = "activation.dat"
-        for j in xrange(cnt):
+        ActDatPath = b"activation.dat"
+        for j in range(cnt):
             resline = reslst[j]
-            pp = resline.find('activation.dat')
+            pp = resline.find(b'activation.dat')
             if pp >= 0:
                 ActDatPath = resline
                 break
@@ -449,7 +432,7 @@ elif isosx:
         adept = lambda tag: '{%s}%s' % (NSMAP['adept'], tag)
         expr = '//%s/%s' % (adept('credentials'), adept('privateLicenseKey'))
         userkey = tree.findtext(expr)
-        userkey = userkey.decode('base64')
+        userkey = b64decode(userkey)
         userkey = userkey[26:]
         return [userkey]
 
@@ -464,41 +447,41 @@ def getkey(outpath):
     if len(keys) > 0:
         if not os.path.isdir(outpath):
             outfile = outpath
-            with file(outfile, 'wb') as keyfileout:
+            with open(outfile, 'wb') as keyfileout:
                 keyfileout.write(keys[0])
-            print(u"Saved a key to {0}".format(outfile))
+            print("Saved a key to {0}".format(outfile))
         else:
             keycount = 0
             for key in keys:
                 while True:
                     keycount += 1
-                    outfile = os.path.join(outpath,u"adobekey_{0:d}.der".format(keycount))
+                    outfile = os.path.join(outpath,"adobekey_{0:d}.der".format(keycount))
                     if not os.path.exists(outfile):
                         break
-                with file(outfile, 'wb') as keyfileout:
+                with open(outfile, 'wb') as keyfileout:
                     keyfileout.write(key)
-                print(u"Saved a key to {0}".format(outfile))
+                print("Saved a key to {0}".format(outfile))
         return True
     return False
 
 def usage(progname):
-    print(u"Finds, decrypts and saves the default Adobe Adept encryption key(s).")
-    print(u"Keys are saved to the current directory, or a specified output directory.")
-    print(u"If a file name is passed instead of a directory, only the first key is saved, in that file.")
-    print(u"Usage:")
-    print(u"    {0:s} [-h] [<outpath>]".format(progname))
+    print("Finds, decrypts and saves the default Adobe Adept encryption key(s).")
+    print("Keys are saved to the current directory, or a specified output directory.")
+    print("If a file name is passed instead of a directory, only the first key is saved, in that file.")
+    print("Usage:")
+    print("    {0:s} [-h] [<outpath>]".format(progname))
 
 def cli_main():
     sys.stdout=SafeUnbuffered(sys.stdout)
     sys.stderr=SafeUnbuffered(sys.stderr)
     argv=unicode_argv()
     progname = os.path.basename(argv[0])
-    print(u"{0} v{1}\nCopyright © 2009-2013 i♥cabbages and Apprentice Alf".format(progname,__version__))
+    print("{0} v{1}\nCopyright © 2009-2020 i♥cabbages, Apprentice Harper et al.".format(progname,__version__))
 
     try:
         opts, args = getopt.getopt(argv[1:], "h")
-    except getopt.GetoptError, err:
-        print(u"Error in options or arguments: {0}".format(err.args[0]))
+    except getopt.GetoptError as err:
+        print("Error in options or arguments: {0}".format(err.args[0]))
         usage(progname)
         sys.exit(2)
 
@@ -527,48 +510,48 @@ def cli_main():
     if len(keys) > 0:
         if not os.path.isdir(outpath):
             outfile = outpath
-            with file(outfile, 'wb') as keyfileout:
+            with open(outfile, 'wb') as keyfileout:
                 keyfileout.write(keys[0])
-            print(u"Saved a key to {0}".format(outfile))
+            print("Saved a key to {0}".format(outfile))
         else:
             keycount = 0
             for key in keys:
                 while True:
                     keycount += 1
-                    outfile = os.path.join(outpath,u"adobekey_{0:d}.der".format(keycount))
+                    outfile = os.path.join(outpath,"adobekey_{0:d}.der".format(keycount))
                     if not os.path.exists(outfile):
                         break
-                with file(outfile, 'wb') as keyfileout:
+                with open(outfile, 'wb') as keyfileout:
                     keyfileout.write(key)
-                print(u"Saved a key to {0}".format(outfile))
+                print("Saved a key to {0}".format(outfile))
     else:
-        print(u"Could not retrieve Adobe Adept key.")
+        print("Could not retrieve Adobe Adept key.")
     return 0
 
 
 def gui_main():
     try:
-        import Tkinter
-        import Tkconstants
-        import tkMessageBox
+        import tkinter
+        import tkinter.constants
+        import tkinter.messagebox
         import traceback
     except:
         return cli_main()
 
-    class ExceptionDialog(Tkinter.Frame):
+    class ExceptionDialog(tkinter.Frame):
         def __init__(self, root, text):
-            Tkinter.Frame.__init__(self, root, border=5)
-            label = Tkinter.Label(self, text=u"Unexpected error:",
-                                  anchor=Tkconstants.W, justify=Tkconstants.LEFT)
-            label.pack(fill=Tkconstants.X, expand=0)
-            self.text = Tkinter.Text(self)
-            self.text.pack(fill=Tkconstants.BOTH, expand=1)
+            tkinter.Frame.__init__(self, root, border=5)
+            label = tkinter.Label(self, text="Unexpected error:",
+                                  anchor=tkinter.constants.W, justify=tkinter.constants.LEFT)
+            label.pack(fill=tkinter.constants.X, expand=0)
+            self.text = tkinter.Text(self)
+            self.text.pack(fill=tkinter.constants.BOTH, expand=1)
 
-            self.text.insert(Tkconstants.END, text)
+            self.text.insert(tkinter.constants.END, text)
 
 
     argv=unicode_argv()
-    root = Tkinter.Tk()
+    root = tkinter.Tk()
     root.withdraw()
     progpath, progname = os.path.split(argv[0])
     success = False
@@ -578,21 +561,21 @@ def gui_main():
         for key in keys:
             while True:
                 keycount += 1
-                outfile = os.path.join(progpath,u"adobekey_{0:d}.der".format(keycount))
+                outfile = os.path.join(progpath,"adobekey_{0:d}.der".format(keycount))
                 if not os.path.exists(outfile):
                     break
 
-            with file(outfile, 'wb') as keyfileout:
+            with open(outfile, 'wb') as keyfileout:
                 keyfileout.write(key)
             success = True
-            tkMessageBox.showinfo(progname, u"Key successfully retrieved to {0}".format(outfile))
-    except ADEPTError, e:
-        tkMessageBox.showerror(progname, u"Error: {0}".format(str(e)))
+            tkinter.messagebox.showinfo(progname, "Key successfully retrieved to {0}".format(outfile))
+    except ADEPTError as e:
+        tkinter.messagebox.showerror(progname, "Error: {0}".format(str(e)))
     except Exception:
         root.wm_state('normal')
         root.title(progname)
         text = traceback.format_exc()
-        ExceptionDialog(root, text).pack(fill=Tkconstants.BOTH, expand=1)
+        ExceptionDialog(root, text).pack(fill=tkinter.constants.BOTH, expand=1)
         root.mainloop()
     if not success:
         return 1

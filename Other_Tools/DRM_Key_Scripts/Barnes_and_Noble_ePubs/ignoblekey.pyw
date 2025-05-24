@@ -4,7 +4,7 @@
 from __future__ import with_statement
 
 # ignoblekey.py
-# Copyright © 2015 Apprentice Alf and Apprentice Harper
+# Copyright © 2015-2020 Apprentice Harper et al.
 
 # Based on kindlekey.py, Copyright © 2010-2013 by some_updates and Apprentice Alf
 
@@ -14,13 +14,14 @@ from __future__ import with_statement
 # Revision history:
 #   1.0 - Initial release
 #   1.1 - remove duplicates and return last key as single key
+#   2.0 - Python 3
 
 """
 Get Barnes & Noble EPUB user key from nook Studio log file
 """
 
 __license__ = 'GPL v3'
-__version__ = "1.1"
+__version__ = "2.0"
 
 import sys
 import os
@@ -97,7 +98,7 @@ def getNookLogFiles():
     logFiles = []
     found = False
     if iswindows:
-        import _winreg as winreg
+        import winreg
 
         # some 64 bit machines do not have the proper registry key for some reason
         # or the python interface to the 32 vs 64 bit registry is broken
@@ -318,7 +319,7 @@ def gui_main():
                 keyfileout.write(key)
             success = True
             tkMessageBox.showinfo(progname, u"Key successfully retrieved to {0}".format(outfile))
-    except DrmException, e:
+    except DrmException as e:
         tkMessageBox.showerror(progname, u"Error: {0}".format(str(e)))
     except Exception:
         root.wm_state('normal')

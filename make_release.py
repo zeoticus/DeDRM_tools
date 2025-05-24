@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# code: utf-8
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
 
 '''
 A wrapper script to generate zip files for GitHub releases.
@@ -13,25 +13,12 @@ import os
 import shutil
 
 
-DEDRM_SRC_DIR = 'DeDRM_Plugin'
-DEDRM_README= 'DeDRM_Plugin_ReadMe.txt'
+DEDRM_SRC_DIR = 'DeDRM_plugin'
+DEDRM_README= 'DeDRM_plugin_ReadMe.txt'
 OBOK_SRC_DIR = 'Obok_plugin'
-OBOK_README = 'Obok_plugin_ReadMe.txt'
+OBOK_README = 'obok_plugin_ReadMe.txt'
 RELEASE_DIR = 'release'
 
-def make_calibre_plugin():
-
-    shutil.make_archive(core_dir, 'zip', core_dir)
-    shutil.rmtree(core_dir)
-
-
-def make_obok_plugin():
-    obok_plugin_dir = os.path.join(SHELLS_BASE, 'Obok_calibre_plugin')
-    core_dir = os.path.join(obok_plugin_dir, 'obok_plugin')
-
-    shutil.copytree(OBOK_SRC_DIR, core_dir)
-    shutil.make_archive(core_dir, 'zip')
-    shutil.rmtree(core_dir)
 
 def make_release(version):
     try:

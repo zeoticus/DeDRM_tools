@@ -1,15 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from __future__ import with_statement
-
-# ignoblekeygen.pyw, version 2.5
-# Copyright © 2009-2010 i♥cabbages
+# ignoblekeygen.py
+# Copyright © 2009-2020 i♥cabbages, Apprentice Harper et al.
 
 # Released under the terms of the GNU General Public Licence, version 3
 # <http://www.gnu.org/licenses/>
-
-# Modified 2010–2013 by some_updates, DiapDealer and Apprentice Alf
 
 # Windows users: Before running this program, you must first install Python.
 #   We recommend ActiveState Python 2.7.X for Windows (x86) from
@@ -34,18 +30,19 @@ from __future__ import with_statement
 #   2.6 - moved unicode_argv call inside main for Windows DeDRM compatibility
 #   2.7 - Work if TkInter is missing
 #   2.8 - Fix bug in stand-alone use (import tkFileDialog)
+#   3.0 - Added Python 3 compatibility for calibre 5.0
 
 """
 Generate Barnes & Noble EPUB user key from name and credit card number.
 """
-from __future__ import print_function
 
 __license__ = 'GPL v3'
-__version__ = "2.8"
+__version__ = "3.0"
 
 import sys
 import os
 import hashlib
+import base64
 
 # Wrap a stream so that output gets flushed immediately
 # and also make sure that any unicode strings get
@@ -57,10 +54,11 @@ class SafeUnbuffered:
         if self.encoding == None:
             self.encoding = "utf-8"
     def write(self, data):
-        if isinstance(data,unicode):
+        if isinstance(data, str):
             data = data.encode(self.encoding,"replace")
-        self.stream.write(data)
-        self.stream.flush()
+        self.stream.buffer.write(data)
+        self.stream.buffer.flush()
+
     def __getattr__(self, attr):
         return getattr(self.stream, attr)
 
@@ -98,15 +96,13 @@ def unicode_argv():
             # Remove Python executable and commands if present
             start = argc.value - len(sys.argv)
             return [argv[i] for i in
-                    xrange(start, argc.value)]
+                    range(start, argc.value)]
         # if we don't have any arguments at all, just pass back script name
         # this should never happen
-        return [u"ignoblekeygen.py"]
+        return ["ignoblekeygen.py"]
     else:
-        argvencoding = sys.stdin.encoding
-        if argvencoding == None:
-            argvencoding = "utf-8"
-        return [arg if (type(arg) == unicode) else unicode(arg,argvencoding) for arg in sys.argv]
+        argvencoding = sys.stdin.encoding or "utf-8"
+        return [arg if isinstance(arg, str) else str(arg, argvencoding) for arg in sys.argv]
 
 
 class IGNOBLEError(Exception):
@@ -199,23 +195,24 @@ def normalize_name(name):
 
 def generate_key(name, ccn):
     # remove spaces and case from name and CC numbers.
-    if type(name)==unicode:
+    name = normalize_name(name)
+    ccn = normalize_name(ccn)
+
+    if type(name)==str:
         name = name.encode('utf-8')
-    if type(ccn)==unicode:
+    if type(ccn)==str:
         ccn = ccn.encode('utf-8')
 
-    name = normalize_name(name) + '\x00'
-    ccn = normalize_name(ccn) + '\x00'
+    name = name + b'\x00'
+    ccn = ccn + b'\x00'
 
     name_sha = hashlib.sha1(name).digest()[:16]
     ccn_sha = hashlib.sha1(ccn).digest()[:16]
     both_sha = hashlib.sha1(name + ccn).digest()
     aes = AES(ccn_sha, name_sha)
-    crypt = aes.encrypt(both_sha + ('\x0c' * 0x0c))
+    crypt = aes.encrypt(both_sha + (b'\x0c' * 0x0c))
     userkey = hashlib.sha1(crypt).digest()
-    return userkey.encode('base64')
-
-
+    return base64.b64encode(userkey)
 
 
 def cli_main():
@@ -229,7 +226,7 @@ def cli_main():
               (progname,))
         return 1
     if len(argv) != 4:
-        print(u"usage: {0} <Name> <CC#> <keyfileout.b64>".format(progname))
+        print("usage: {0} <Name> <CC#> <keyfileout.b64>".format(progname))
         return 1
     name, ccn, keypath = argv[1:]
     userkey = generate_key(name, ccn)
@@ -239,54 +236,54 @@ def cli_main():
 
 def gui_main():
     try:
-        import Tkinter
-        import Tkconstants
-        import tkMessageBox
-        import tkFileDialog
+        import tkinter
+        import tkinter.constants
+        import tkinter.messagebox
+        import tkinter.filedialog
         import traceback
     except:
         return cli_main()
 
-    class DecryptionDialog(Tkinter.Frame):
+    class DecryptionDialog(tkinter.Frame):
         def __init__(self, root):
-            Tkinter.Frame.__init__(self, root, border=5)
-            self.status = Tkinter.Label(self, text=u"Enter parameters")
-            self.status.pack(fill=Tkconstants.X, expand=1)
-            body = Tkinter.Frame(self)
-            body.pack(fill=Tkconstants.X, expand=1)
-            sticky = Tkconstants.E + Tkconstants.W
+            tkinter.Frame.__init__(self, root, border=5)
+            self.status = tkinter.Label(self, text="Enter parameters")
+            self.status.pack(fill=tkinter.constants.X, expand=1)
+            body = tkinter.Frame(self)
+            body.pack(fill=tkinter.constants.X, expand=1)
+            sticky = tkinter.constants.E + tkinter.constants.W
             body.grid_columnconfigure(1, weight=2)
-            Tkinter.Label(body, text=u"Account Name").grid(row=0)
-            self.name = Tkinter.Entry(body, width=40)
+            tkinter.Label(body, text="Account Name").grid(row=0)
+            self.name = tkinter.Entry(body, width=40)
             self.name.grid(row=0, column=1, sticky=sticky)
-            Tkinter.Label(body, text=u"CC#").grid(row=1)
-            self.ccn = Tkinter.Entry(body, width=40)
+            tkinter.Label(body, text="CC#").grid(row=1)
+            self.ccn = tkinter.Entry(body, width=40)
             self.ccn.grid(row=1, column=1, sticky=sticky)
-            Tkinter.Label(body, text=u"Output file").grid(row=2)
-            self.keypath = Tkinter.Entry(body, width=40)
+            tkinter.Label(body, text="Output file").grid(row=2)
+            self.keypath = tkinter.Entry(body, width=40)
             self.keypath.grid(row=2, column=1, sticky=sticky)
-            self.keypath.insert(2, u"bnepubkey.b64")
-            button = Tkinter.Button(body, text=u"...", command=self.get_keypath)
+            self.keypath.insert(2, "bnepubkey.b64")
+            button = tkinter.Button(body, text="...", command=self.get_keypath)
             button.grid(row=2, column=2)
-            buttons = Tkinter.Frame(self)
+            buttons = tkinter.Frame(self)
             buttons.pack()
-            botton = Tkinter.Button(
-                buttons, text=u"Generate", width=10, command=self.generate)
-            botton.pack(side=Tkconstants.LEFT)
-            Tkinter.Frame(buttons, width=10).pack(side=Tkconstants.LEFT)
-            button = Tkinter.Button(
-                buttons, text=u"Quit", width=10, command=self.quit)
-            button.pack(side=Tkconstants.RIGHT)
+            botton = tkinter.Button(
+                buttons, text="Generate", width=10, command=self.generate)
+            botton.pack(side=tkinter.constants.LEFT)
+            tkinter.Frame(buttons, width=10).pack(side=tkinter.constants.LEFT)
+            button = tkinter.Button(
+                buttons, text="Quit", width=10, command=self.quit)
+            button.pack(side=tkinter.constants.RIGHT)
 
         def get_keypath(self):
-            keypath = tkFileDialog.asksaveasfilename(
-                parent=None, title=u"Select B&N ePub key file to produce",
-                defaultextension=u".b64",
+            keypath = tkinter.filedialog.asksaveasfilename(
+                parent=None, title="Select B&N ePub key file to produce",
+                defaultextension=".b64",
                 filetypes=[('base64-encoded files', '.b64'),
                            ('All Files', '.*')])
             if keypath:
                 keypath = os.path.normpath(keypath)
-                self.keypath.delete(0, Tkconstants.END)
+                self.keypath.delete(0, tkinter.constants.END)
                 self.keypath.insert(0, keypath)
             return
 
@@ -295,35 +292,35 @@ def gui_main():
             ccn = self.ccn.get()
             keypath = self.keypath.get()
             if not name:
-                self.status['text'] = u"Name not specified"
+                self.status['text'] = "Name not specified"
                 return
             if not ccn:
-                self.status['text'] = u"Credit card number not specified"
+                self.status['text'] = "Credit card number not specified"
                 return
             if not keypath:
-                self.status['text'] = u"Output keyfile path not specified"
+                self.status['text'] = "Output keyfile path not specified"
                 return
-            self.status['text'] = u"Generating..."
+            self.status['text'] = "Generating..."
             try:
                 userkey = generate_key(name, ccn)
-            except Exception, e:
-                self.status['text'] = u"Error: (0}".format(e.args[0])
+            except Exception as e:
+                self.status['text'] = "Error: (0}".format(e.args[0])
                 return
             open(keypath,'wb').write(userkey)
-            self.status['text'] = u"Keyfile successfully generated"
+            self.status['text'] = "Keyfile successfully generated"
 
-    root = Tkinter.Tk()
+    root = tkinter.Tk()
     if AES is None:
         root.withdraw()
-        tkMessageBox.showerror(
+        tkinter.messagebox.showerror(
             "Ignoble EPUB Keyfile Generator",
             "This script requires OpenSSL or PyCrypto, which must be installed "
             "separately.  Read the top-of-script comment for details.")
         return 1
-    root.title(u"Barnes & Noble ePub Keyfile Generator v.{0}".format(__version__))
+    root.title("Barnes & Noble ePub Keyfile Generator v.{0}".format(__version__))
     root.resizable(True, False)
     root.minsize(300, 0)
-    DecryptionDialog(root).pack(fill=Tkconstants.X, expand=1)
+    DecryptionDialog(root).pack(fill=tkinter.constants.X, expand=1)
     root.mainloop()
     return 0
 
